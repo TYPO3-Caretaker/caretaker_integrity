@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<!-- 
+/**
+ * 
+ * @Author	Tobias Liebig <liebig@networkteam.com>
+ * 
+ * $$Id:$$
+ */
+-->
+
+<T3DataStructure>
+	<meta>
+		<langDisable>1</langDisable>
+	</meta>
+			<ROOT>
+				<TCEforms> 
+                        <sheetTitle>OS</sheetTitle> 
+                </TCEforms> 
+				<type>array</type>
+				<el>
+					<!-- file_whitelist>
+						<TCEforms>
+							<label>file whitelist</label>
+							<config>
+								<type>text</type>
+								<rows>5</rows>
+								<cols>50</cols>
+							</config>
+						</TCEforms>
+					</file_whitelist -->				
+				</el>
+			</ROOT>
+
+</T3DataStructure>

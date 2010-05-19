@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<!-- 
+/**
+ *
+ * @author Tobias Liebig <liebig@networkteam.com>
+ * 
+ * $$Id:$$
+ */
+-->
+
+<T3DataStructure>
+	<meta>
+		<langDisable>1</langDisable>
+	</meta>
+			<ROOT>
+				<TCEforms> 
+                        <sheetTitle>OS</sheetTitle> 
+                </TCEforms> 
+				<type>array</type>
+				<el>
+					<path>
+						<TCEforms>
+							<label>relative path</label>
+							<config>
+								<type>input</type>
+								<size>20</size>
+							</config>
+						</TCEforms>
+					</path>	
+					<checksum_preset>
+						<TCEforms>
+							<label>Checksum presets</label>
+							<config>
+								<type>select</type>
+								<size>1</size>
+								<maxsize>1</maxsize>
+								<items>
+							    	<numIndex index="0">
+							    		<numIndex index="0">manually (set checksum below)</numIndex>
+										<numIndex index="1"></numIndex>
+							    	</numIndex>
+								</items>
+								<fileFolder>EXT:caretaker_integrity/res/fingerprints/</fileFolder>
+								<fileFolder_extList>fingerprint</fileFolder_extList>
+							</config>
+						</TCEforms>
+					</checksum_preset>
+					<checksum>
+						<TCEforms>
+							<label>expected checksum (if no preset choosen)</label>
+							<config>
+								<type>input</type>
+								<size>32</size>
+							</config>
+						</TCEforms>
+					</checksum>			
+				</el>
+			</ROOT>
+
+</T3DataStructure>

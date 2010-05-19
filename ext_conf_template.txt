@@ -1,0 +1,2 @@
+# cat=basic/enable; type=string; label=folder with TYPO3-core fingerprints
+path.fingerprints=EXT:/caretaker_integrity/res/fingerprints/
