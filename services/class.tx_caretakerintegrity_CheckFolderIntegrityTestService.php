@@ -31,12 +31,12 @@ class tx_caretakerintegrity_CheckFolderIntegrityTestService extends tx_caretaker
 		
 		$fingerprint = $this->getLocalFingerprint();
 		if (!$fingerprint || empty($fingerprint['checksum'])) {
-			return tx_caretaker_TestResult::create(TX_CARETAKER_STATE_WARNING, 0, 'Can\'t get local fingerprint (configuration error)');
+			return tx_caretaker_TestResult::create(tx_caretaker_Constants::state_warning, 0, 'Can\'t get local fingerprint (configuration error)');
 		}
 		
 		list($isSuccessful, $remoteFingerprint) = $this->getRemoteFingerprint($path);
 		if (!$isSuccessful || empty($remoteFingerprint)) {
-			return tx_caretaker_TestResult::create(TX_CARETAKER_STATE_WARNING, 0, $remoteFingerprint);
+			return tx_caretaker_TestResult::create(tx_caretaker_Constants::state_warning, 0, $remoteFingerprint);
 		}
 		
 		return $this->verifyFingerprint($path, $remoteFingerprint, $fingerprint);
@@ -96,19 +96,19 @@ class tx_caretakerintegrity_CheckFolderIntegrityTestService extends tx_caretaker
 	
 	protected function verifyFingerprint($path, $remoteFingerprint, $expectedFingerprint) {
 		if ($expectedFingerprint['checksum'] === $remoteFingerprint['checksum']) {
-			return tx_caretaker_TestResult::create(TX_CARETAKER_STATE_OK, 0, '');
+			return tx_caretaker_TestResult::create(tx_caretaker_Constants::state_ok, 0, '');
 		} else {
 			if (is_array($expectedFingerprint['singleChecksums'])) {
 				return $this->verifySingleChecksums($path, $expectedFingerprint);
 			}
-			return tx_caretaker_TestResult::create(TX_CARETAKER_STATE_ERROR, 0, 'Can\'t verify fingerprint (files differ)!');
+			return tx_caretaker_TestResult::create(tx_caretaker_Constants::state_error, 0, 'Can\'t verify fingerprint (files differ)!');
 		}
 	}
 	
 	protected function verifySingleChecksums($path, $expectedFingerprint) {
 		list($isSuccessful, $remoteFingerprint) = $this->getRemoteFingerprint($path, true);
 		if (!$isSuccessful || empty($remoteFingerprint)) {
-			return tx_caretaker_TestResult::create(TX_CARETAKER_STATE_WARNING, 0, $remoteFingerprint);
+			return tx_caretaker_TestResult::create(tx_caretaker_Constants::state_warning, 0, $remoteFingerprint);
 		}
 		
 		foreach ($remoteFingerprint['singleChecksums'] as $file => $checksum) {
@@ -118,12 +118,12 @@ class tx_caretakerintegrity_CheckFolderIntegrityTestService extends tx_caretaker
 		}
 		
 		if (count($errornousFiles) > 0) {
-			return tx_caretaker_TestResult::create(TX_CARETAKER_STATE_ERROR, count($errornousFiles), 
+			return tx_caretaker_TestResult::create(tx_caretaker_Constants::state_error, count($errornousFiles), 
 				'Can\'t verify fingerprint (' . count($errornousFiles) . ' files differ) ' . chr(10) . 
 				implode(chr(10) . ' - ', $errornousFiles)
 			);
 		} else {
-			return tx_caretaker_TestResult::create(TX_CARETAKER_STATE_ERROR, 0, 'Can\'t verify fingerprint (files seems to be ok, but over-all check failed)!');
+			return tx_caretaker_TestResult::create(tx_caretaker_Constants::state_error, 0, 'Can\'t verify fingerprint (files seems to be ok, but over-all check failed)!');
 		}
 	}
 }

@@ -32,7 +32,7 @@ class tx_caretakerintegrity_CheckCoreIntegrityTestService extends tx_caretakerin
 			if ($testResult) {
 				return $testResult;
 			}
-			return tx_caretaker_TestResult::create(TX_CARETAKER_STATE_WARNING, 0, $remoteFingerprint . ' / ' . $remoteTYPO3Version );
+			return tx_caretaker_TestResult::create(tx_caretaker_Constants::state_warning, 0, $remoteFingerprint . ' / ' . $remoteTYPO3Version );
 		} else {
 			return $this->verifyFingerprint($remoteFingerprint, $remoteTYPO3Version);
 		}
@@ -88,12 +88,12 @@ class tx_caretakerintegrity_CheckCoreIntegrityTestService extends tx_caretakerin
 		$path = 'EXT:caretaker_integrity/res/fingerprints/typo3_src-' . $remoteTYPO3Version . '.fingerprint';
 		$path = t3lib_div::getFileAbsFileName($path);
 		if (!file_exists($path)) {
-			return tx_caretaker_TestResult::create(TX_CARETAKER_STATE_WARNING, 0, 'Can\'t find local fingerprint for typo3_src-' . $remoteTYPO3Version );
+			return tx_caretaker_TestResult::create(tx_caretaker_Constants::state_warning, 0, 'Can\'t find local fingerprint for typo3_src-' . $remoteTYPO3Version );
 		
 		} else {
 			$fingerprint = json_decode(file_get_contents($path), true);
 			if ($fingerprint['checksum'] === $remoteFingerprint['checksum']) {
-				return tx_caretaker_TestResult::create(TX_CARETAKER_STATE_OK, 0, '');
+				return tx_caretaker_TestResult::create(tx_caretaker_Constants::state_ok, 0, '');
 			} else {
 				$remote = $this->getRemoteSingleFileChecksums();
 				$errornousFiles = array();
@@ -104,12 +104,12 @@ class tx_caretakerintegrity_CheckCoreIntegrityTestService extends tx_caretakerin
 					}
 				}
 				if (count($errornousFiles) > 0) {
-					return tx_caretaker_TestResult::create(TX_CARETAKER_STATE_ERROR, count($errornousFiles), 
+					return tx_caretaker_TestResult::create(tx_caretaker_Constants::state_error, count($errornousFiles), 
 						'Can\'t verify fingerprint (' . count($errornousFiles) . ' files differ) ' . chr(10) . 
 						implode(chr(10) . ' - ', $errornousFiles)
 					);
 				} else {
-					return tx_caretaker_TestResult::create(TX_CARETAKER_STATE_ERROR, 0, 'Can\'t verify fingerprint (files seems to be ok, but over-all check failed)!' . chr(10) . 
+					return tx_caretaker_TestResult::create(tx_caretaker_Constants::state_error, 0, 'Can\'t verify fingerprint (files seems to be ok, but over-all check failed)!' . chr(10) . 
 						$fingerprint['checksum'] . ' !== ' . $remoteFingerprint['checksum'] );
 				}
 			}
