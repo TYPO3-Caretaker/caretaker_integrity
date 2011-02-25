@@ -47,7 +47,7 @@ class FingerprintGenerator {
 
 	public function __construct() {
 		$this->destinationFolder = dirname(__FILE__) . '/fingerprints/';
-		$this->tmpFolder = dirname(__FILE__) . '/tmp/';
+		$this->tmpFolder = dirname(__FILE__) . '/../../../../typo3temp/';
 	}
 
 	/**
@@ -114,9 +114,12 @@ class FingerprintGenerator {
 	 */
 	protected function createFingerprint($file, $version) {
 		echo '.untar.';
-		exec('rm -rf ' . $this->tmpFolder . 'typo3_src');
+		exec('rm -rf ' . $this->tmpFolder . $version);
+		@exec('unlink ' . $this->tmpFolder . 'typo3_src');
 		echo '.';
-		exec('tar -xz -f ' . $this->tmpFolder . $version . '.tar.gz -s "/' . $version . '/typo3_src/" -C ' . $this->tmpFolder);
+		exec('tar -xz -f ' . $this->tmpFolder . $version . '.tar.gz -C ' . $this->tmpFolder);
+		echo '.';
+		exec('ln -s ' . $this->tmpFolder . $version . ' ' . $this->tmpFolder . 'typo3_src');
 		echo '.';
 
 		echo '.fingerprint.';
@@ -124,7 +127,8 @@ class FingerprintGenerator {
 		echo '.';
 
 		echo '.cleanup.';
-		exec('rm -rf ' . $this->tmpFolder . 'typo3_src');
+		exec('rm -rf ' . $this->tmpFolder . $version);
+		exec('unlink ' . $this->tmpFolder . 'typo3_src');
 		echo '.';
 
 		if (!empty($checksum)) {
