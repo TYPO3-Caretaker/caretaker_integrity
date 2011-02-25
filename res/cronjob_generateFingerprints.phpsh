@@ -1,0 +1,176 @@
+<?php
+
+/***************************************************************
+ *  Copyright notice
+ *
+ *  (c) 2011 Tobias Liebig <liebig@networkteam.com>
+ *  All rights reserved
+ *
+ *  This script is part of the TYPO3 project. The TYPO3 project is
+ *  free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  The GNU General Public License can be found at
+ *  http://www.gnu.org/copyleft/gpl.html.
+ *
+ *  This script is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  This copyright notice MUST APPEAR in all copies of the script!
+ ***************************************************************/
+
+
+
+/**
+ *
+ */
+class FingerprintGenerator {
+
+	/**
+	 *
+	 */
+	protected $rssFeed = 'http://sourceforge.net/api/file/index/project-id/20391/mtime/desc/limit/40/rss';
+
+	/**
+	 *
+	 */
+	protected $tmpFolder;
+
+	/**
+	 *
+	 */
+	protected $destinationFolder;
+
+	public function __construct() {
+		$this->destinationFolder = dirname(__FILE__) . '/fingerprints/';
+		$this->tmpFolder = dirname(__FILE__) . '/tmp/';
+	}
+
+	/**
+	 *
+	 */
+	protected function getFolderChecksum($path) {
+		$dir = dir($this->tmpFolder . $path);
+
+		$md5s = array();
+		while(false !== ($entry = $dir->read())) {
+			if ($entry === '.' || $entry === '..' || $entry === '.svn') {
+				continue;
+			}
+			if (is_dir($this->tmpFolder . $path . '/' . $entry)) {
+				list($checksum, $md5sOfSubfolder) = $this->getFolderChecksum($path . '/' . $entry);
+				$md5s = array_merge($md5s, $md5sOfSubfolder);
+			} else {
+				$relPath = $path . '/' . $entry;
+				$md5s[$relPath] = $this->getFileChecksum($relPath);
+			}
+		}
+		
+		asort($md5s);
+		return array(
+			md5(implode(',', $md5s)),
+			$md5s
+		);
+	}
+
+	/**
+	 *
+	 */
+	protected function getFileChecksum($path) {
+		if (!is_file($this->tmpFolder . $path)) {
+			return false;
+		}
+		$md5 = md5_file($this->tmpFolder . $path);
+		return $md5;
+	}
+
+	/**
+	 *
+	 */
+	protected function downloadSrc($file, $item) {
+		if (file_exists($file)) {
+			echo 'skip download';
+		} else {
+			echo '.download.';
+			$read = fopen($item->link, 'rb');
+			$write = fopen($file, 'wb');
+			$i = 0;
+			while (!feof($read)) {
+				$i++;
+				echo $i % 70 === 0 ? '.' : '';
+				fwrite($write, fread($read, 8192));
+			}
+			fclose($read);
+			fclose($write);
+		}
+	}
+
+	/**
+	 *
+	 */
+	protected function createFingerprint($file, $version) {
+		echo '.untar.';
+		exec('rm -rf ' . $this->tmpFolder . 'typo3_src');
+		echo '.';
+		exec('tar -xz -f ' . $this->tmpFolder . $version . '.tar.gz -s "/' . $version . '/typo3_src/" -C ' . $this->tmpFolder);
+		echo '.';
+
+		echo '.fingerprint.';
+		list($checksum, $md5s) = $this->getFolderChecksum('typo3_src');
+		echo '.';
+
+		echo '.cleanup.';
+		exec('rm -rf ' . $this->tmpFolder . 'typo3_src');
+		echo '.';
+
+		if (!empty($checksum)) {
+			$result = array(
+				'checksum' => $checksum,
+				'singleChecksums' => $md5s
+			);
+			$fingerprint = json_encode($result);
+			file_put_contents($file, $fingerprint);
+			return TRUE;
+		} else {
+			return FALSE;
+		}
+	}
+	
+	/**
+	 *
+	 */
+	public function start() {
+		$xml = new SimpleXMLElement(file_get_contents($this->rssFeed));
+		foreach ($xml->channel->item as $item) {
+			preg_match('/(typo3_src-(4\.[0-9]+\.[0-9]+)).tar.gz/', $item->title, $matches);
+			if (!empty($matches)) {
+				echo $item->title . chr(10);
+				$version = $matches[1];
+				$srcFile = $this->tmpFolder . $matches[0];
+				$fingerprintFile = $this->destinationFolder . $version . '.fingerprint';
+
+				if (file_exists($fingerprintFile)) {
+					echo '[skip]' . chr(10);
+					continue;
+				}
+
+				$this->downloadSrc($srcFile, $item);
+
+				if ($this->createFingerprint($fingerprintFile, $version, $this->tmpFolder)) {
+					echo ' [OK]' . chr(10);
+				} else {
+					echo ' [ERR]' . chr(10);
+				}
+			}
+		}
+	}
+}
+
+$generator = new FingerprintGenerator();
+$generator->start();
+
+?>
