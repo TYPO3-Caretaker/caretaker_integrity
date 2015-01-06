@@ -83,18 +83,21 @@ class tx_caretakerintegrity_CheckCoreIntegrityTestService extends tx_caretakerin
 		return $remoteChecksums;
 	}
 
-
 	protected function verifyFingerprint($remoteFingerprint, $remoteTYPO3Version) {
-		// TODO get path from config
-		$path = 'EXT:caretaker_integrity/res/fingerprints/typo3_src-' . $remoteTYPO3Version . '.fingerprint';
-		$path = t3lib_div::getFileAbsFileName($path);
-		if (!file_exists($path)) {
+		$path = 'EXT:caretaker_integrity/res/fingerprints/';
+		$filename = 'typo3_src-' . $remoteTYPO3Version . '.fingerprint';
+		$extensionConfiguration = unserialize($GLOBALS['TYPO3_CONF_VARS']['EXT']['extConf']['caretaker_integrity']);
+		if (!empty($extensionConfiguration['path.']['fingerprints'])) {
+			$path = rtrim(t3lib_div::fixWindowsFilePath($extensionConfiguration['path.']['fingerprints']), '/') . '/';
+		}
+		$fingerprintFile = t3lib_div::getFileAbsFileName($path . $filename, FALSE);
+		if (!file_exists($fingerprintFile)) {
 			return $this->createTestResult(
-				'Can\'t find local fingerprint for typo3_src-' . $remoteTYPO3Version,
+				'Can\'t find local fingerprint file "' . $filename . '" in defined path "' . $path .'"',
 				tx_caretaker_Constants::state_warning
 			);
 		} else {
-			$fingerprint = json_decode(file_get_contents($path), true);
+			$fingerprint = json_decode(file_get_contents($fingerprintFile), true);
 			if ($fingerprint['checksum'] === $remoteFingerprint['checksum']) {
 				return $this->createTestResult('TYPO3 source seems to be a git repository');
 			} else {
