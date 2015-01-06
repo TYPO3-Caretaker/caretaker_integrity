@@ -26,7 +26,7 @@ require_once(t3lib_extMgm::extPath('caretaker_instance', 'services/class.tx_care
 
 class tx_caretakerintegrity_CheckCoreIntegrityTestService extends tx_caretakerinstance_RemoteTestServiceBase {
 
-	const FILE_FILTER = '/(^typo3_src\/(\.gitignore|\.gitmodules|CVS|SVNreadme\.txt|[^\/]*\.webprj|[^\/]*\.orig|[^\/]*~|\.travis\.yml)$|\/src(\/|$)|\/tests(\/|$))/';
+	const FILE_FILTER = '(^typo3_src/(\.gitignore|\.gitmodules|CVS|SVNreadme\.txt|[^/]*\.webprj|[^/]*\.orig|[^/]*~|\.travis\.yml)$|/src(/|$)|/tests(/|$))';
 
 	public function runTest() {
 		list($isSuccessful, $remoteFingerprint, $remoteTYPO3Version, $testResult) = $this->getRemoteChecksum();
@@ -103,12 +103,29 @@ class tx_caretakerintegrity_CheckCoreIntegrityTestService extends tx_caretakerin
 			} else {
 				$remote = $this->getRemoteSingleFileChecksums();
 				$errornousFiles = array();
+				$additionalFiles = explode("\n", $this->getConfigValue('additionalFiles'));
+
 				foreach ($remote['singleChecksums'] as $file => $checksum) {
-					// TODO whitelist
 					if ($checksum !== $fingerprint['singleChecksums'][$file]) {
-						$errornousFiles[] = $file;
+						$valid = FALSE;
+						foreach ($additionalFiles as $additionalFile) {
+							list($regularExpression, $definedChecksum) = explode('=', $additionalFile);
+							if (preg_match('/' . str_replace('/', '\/', $regularExpression) . '/', $file)) {
+								if (empty($definedChecksum) || $checksum === $definedChecksum) {
+									$valid = TRUE;
+								}
+							}
+						}
+						unset($additionalFile);
+
+						if ($valid) {
+							unset($remote['singleChecksums'][$file]);
+						} else {
+							$errornousFiles[] = $file;
+						}
 					}
 				}
+
 				if (count($errornousFiles) > 0) {
 					return $this->createTestResult(
 						'Can\'t verify fingerprint (' . count($errornousFiles) . ' files differ) ' . chr(10) .
@@ -117,14 +134,17 @@ class tx_caretakerintegrity_CheckCoreIntegrityTestService extends tx_caretakerin
 						count($errornousFiles)
 					);
 				} else {
+					$missingFiles = '(' . implode('|', explode("\n", $this->getConfigValue('missingFiles'))) . ')';
 					foreach ($fingerprint['singleChecksums'] as $file => $checksum) {
-						if (preg_match(static::FILE_FILTER, $file) && !isset($remote['singleChecksums'][$file])) {
+						if (!isset($remote['singleChecksums'][$file]) &&
+							(preg_match('/' . str_replace('/', '\/', static::FILE_FILTER) . '/', $file) || preg_match('/' . str_replace('/', '\/', $missingFiles) . '/', $file)))
+						{
 							unset($fingerprint['singleChecksums'][$file]);
 						}
 					}
 					unset($file, $checksum);
 
-					if ($remote['checksum'] === md5(implode(',', $fingerprint['singleChecksums']))) {
+					if (md5(implode(',', $remote['singleChecksums'])) === md5(implode(',', $fingerprint['singleChecksums']))) {
 						return $this->createTestResult('TYPO3 source seems to be a download');
 					} else {
 						return $this->createTestResult(

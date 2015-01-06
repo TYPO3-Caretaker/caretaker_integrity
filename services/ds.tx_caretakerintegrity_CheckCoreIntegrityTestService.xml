@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
-<!-- 
+<!--
 /**
- * 
+ *
  * @Author	Tobias Liebig <liebig@networkteam.com>
- * 
+ *
  * $$Id:$$
  */
 -->
@@ -13,21 +13,31 @@
 		<langDisable>1</langDisable>
 	</meta>
 			<ROOT>
-				<TCEforms> 
-                        <sheetTitle>OS</sheetTitle> 
-                </TCEforms> 
+				<TCEforms>
+                        <sheetTitle>OS</sheetTitle>
+                </TCEforms>
 				<type>array</type>
 				<el>
-					<!-- file_whitelist>
+					<additionalFiles>
 						<TCEforms>
-							<label>file whitelist</label>
+							<label>Additional files pattern - allowed to exists on remotes (prefixed with typo3_src/) (format: filename[=checksum]) (one path per line)</label>
 							<config>
 								<type>text</type>
 								<rows>5</rows>
 								<cols>50</cols>
 							</config>
 						</TCEforms>
-					</file_whitelist -->				
+					</additionalFiles>
+					<missingFiles>
+						<TCEforms>
+							<label>Missing files pattern - allowed to be missing on remotes (prefixed with typo3_src/) (one path per line)</label>
+							<config>
+								<type>text</type>
+								<rows>5</rows>
+								<cols>50</cols>
+							</config>
+						</TCEforms>
+					</missingFiles>
 				</el>
 			</ROOT>
 
