@@ -23,8 +23,6 @@
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
 
-
-
 /**
  *
  */
@@ -33,35 +31,37 @@ class FingerprintGenerator {
 	/**
 	 *
 	 */
-	protected $rssFeed = 'http://sourceforge.net/api/file/index/project-id/20391/mtime/desc/limit/40/rss';
+	protected $sourceUrl = 'git://git.typo3.org/Packages/TYPO3.CMS.git';
 
 	/**
 	 *
 	 */
-	protected $tmpFolder;
+	protected $tempFolder;
 
 	/**
 	 *
 	 */
-	protected $destinationFolder;
+	protected $fingerprintsFolder;
 
 	public function __construct() {
-		$this->destinationFolder = dirname(__FILE__) . '/fingerprints/';
-		$this->tmpFolder = dirname(__FILE__) . '/../../../../typo3temp/';
+		$this->fingerprintsFolder = dirname(__FILE__) . '/fingerprints/';
+		$this->tempFolder = dirname(__FILE__) . '/../../../../typo3temp/';
 	}
 
 	/**
-	 *
+	 * @param string $path
+	 * @return array
 	 */
 	protected function getFolderChecksum($path) {
-		$dir = dir($this->tmpFolder . $path);
+		$dir = dir($this->tempFolder . $path);
 
 		$md5s = array();
-		while(false !== ($entry = $dir->read())) {
-			if ($entry === '.' || $entry === '..' || $entry === '.svn') {
+		while (FALSE !== ($entry = $dir->read())) {
+			if ($entry === '.' || $entry === '..' || $entry === '.git' || $entry === '.svn') {
 				continue;
 			}
-			if (is_dir($this->tmpFolder . $path . '/' . $entry)) {
+
+			if (is_dir($this->tempFolder . $path . '/' . $entry)) {
 				list($checksum, $md5sOfSubfolder) = $this->getFolderChecksum($path . '/' . $entry);
 				$md5s = array_merge($md5s, $md5sOfSubfolder);
 			} else {
@@ -69,8 +69,9 @@ class FingerprintGenerator {
 				$md5s[$relPath] = $this->getFileChecksum($relPath);
 			}
 		}
-		
+
 		asort($md5s);
+
 		return array(
 			md5(implode(',', $md5s)),
 			$md5s
@@ -78,57 +79,25 @@ class FingerprintGenerator {
 	}
 
 	/**
-	 *
+	 * @param string $path
+	 * @return string
 	 */
 	protected function getFileChecksum($path) {
-		if (!is_file($this->tmpFolder . $path)) {
-			return false;
+		if (!is_file($this->tempFolder . $path)) {
+			return '';
 		}
-		$md5 = md5_file($this->tmpFolder . $path);
+		$md5 = md5_file($this->tempFolder . $path);
+
 		return $md5;
 	}
 
 	/**
-	 *
+	 * @param string $file
+	 * @return bool
 	 */
-	protected function downloadSrc($file, $item) {
-		if (file_exists($file)) {
-			echo 'skip download';
-		} else {
-			echo '.download.';
-			$read = fopen($item->link, 'rb');
-			$write = fopen($file, 'wb');
-			$i = 0;
-			while (!feof($read)) {
-				$i++;
-				echo $i % 70 === 0 ? '.' : '';
-				fwrite($write, fread($read, 8192));
-			}
-			fclose($read);
-			fclose($write);
-		}
-	}
-
-	/**
-	 *
-	 */
-	protected function createFingerprint($file, $version) {
-		echo '.untar.';
-		exec('rm -rf ' . $this->tmpFolder . $version);
-		@exec('unlink ' . $this->tmpFolder . 'typo3_src');
-		echo '.';
-		exec('tar -xz -f ' . $this->tmpFolder . $version . '.tar.gz -C ' . $this->tmpFolder);
-		echo '.';
-		exec('ln -s ' . $this->tmpFolder . $version . ' ' . $this->tmpFolder . 'typo3_src');
-		echo '.';
-
-		echo '.fingerprint.';
+	protected function createFingerprint($file) {
+		echo '.fingerprint.' . chr(10);
 		list($checksum, $md5s) = $this->getFolderChecksum('typo3_src');
-		echo '.';
-
-		echo '.cleanup.';
-		exec('rm -rf ' . $this->tmpFolder . $version);
-		exec('unlink ' . $this->tmpFolder . 'typo3_src');
 		echo '.';
 
 		if (!empty($checksum)) {
@@ -138,39 +107,68 @@ class FingerprintGenerator {
 			);
 			$fingerprint = json_encode($result);
 			file_put_contents($file, $fingerprint);
+
 			return TRUE;
-		} else {
-			return FALSE;
 		}
+
+		return FALSE;
 	}
-	
+
 	/**
 	 *
 	 */
 	public function start() {
-		$xml = new SimpleXMLElement(file_get_contents($this->rssFeed));
-		foreach ($xml->channel->item as $item) {
-			preg_match('/(typo3_src-([46]\.[0-9]+\.[0-9]+)).tar.gz/', $item->title, $matches);
+		$this->initializeRepository();
+		echo 'Get tags' . chr(10);
+		ob_start();
+		passthru($this->getGitCommand('tag', '--list'));
+		$tagArray = array_filter(explode("\n", ob_get_clean()));
+		foreach ($tagArray as $tagName) {
+			preg_match('/TYPO3_\d+\-\d+\-\d+|\d+\.\d+\.\d+/', $tagName, $matches);
 			if (!empty($matches)) {
-				echo $item->title . chr(10);
-				$version = $matches[1];
-				$srcFile = $this->tmpFolder . $matches[0];
-				$fingerprintFile = $this->destinationFolder . $version . '.fingerprint';
+				echo chr(10) . $tagName . chr(10);
+				$version = str_replace('-', '.', str_replace('TYPO3_', '', $matches[0]));
+				$fingerprintFile = $this->fingerprintsFolder . 'typo3_src-' . $version . '.fingerprint';
 
 				if (file_exists($fingerprintFile)) {
 					echo '[skip]' . chr(10);
 					continue;
 				}
 
-				$this->downloadSrc($srcFile, $item);
+				echo 'Checking out' . chr(10);;
+				exec($this->getGitCommand('checkout', '-q ' . $tagName));
 
-				if ($this->createFingerprint($fingerprintFile, $version, $this->tmpFolder)) {
+				if ($this->createFingerprint($fingerprintFile)) {
 					echo ' [OK]' . chr(10);
 				} else {
 					echo ' [ERR]' . chr(10);
 				}
 			}
 		}
+		exec($this->getGitCommand('checkout', '-q master'));
+	}
+
+	/**
+	 *
+	 */
+	protected function initializeRepository() {
+		if (!is_dir($this->tempFolder . 'typo3_src')) {
+			echo 'Cloning repository' . chr(10);
+			exec('git clone ' . $this->sourceUrl . ' ' . $this->tempFolder . 'typo3_src');
+		} else {
+			echo 'Updating repository' . chr(10);
+			exec($this->getGitCommand('fetch', '-q origin'));
+		}
+	}
+
+	/**
+	 * @param string $command
+	 * @param string $options
+	 * @return string
+	 */
+	protected function getGitCommand($command, $options) {
+		return 'git --git-dir ' . $this->tempFolder . 'typo3_src/.git --work-tree ' . $this->tempFolder . 'typo3_src ' .
+			$command . (!empty($options) ? ' ' . $options : '');
 	}
 }
 

@@ -25,24 +25,25 @@
 require_once(t3lib_extMgm::extPath('caretaker_instance', 'services/class.tx_caretakerinstance_RemoteTestServiceBase.php'));
 
 class tx_caretakerintegrity_CheckCoreIntegrityTestService extends tx_caretakerinstance_RemoteTestServiceBase {
-	
+
+	const FILE_FILTER = '(^typo3_src/(\.gitignore|\.gitmodules|CVS|SVNreadme\.txt|[^/]*\.webprj|[^/]*\.orig|[^/]*~|\.travis\.yml)$|/src(/|$)|/tests(/|$))';
+
 	public function runTest() {
 		list($isSuccessful, $remoteFingerprint, $remoteTYPO3Version, $testResult) = $this->getRemoteChecksum();
 		if (!$isSuccessful) {
 			if ($testResult) {
 				return $testResult;
 			}
-			return tx_caretaker_TestResult::create(tx_caretaker_Constants::state_warning, 0, $remoteFingerprint . ' / ' . $remoteTYPO3Version );
+			return $this->createTestResult($remoteFingerprint . ' / ' . $remoteTYPO3Version, tx_caretaker_Constants::state_warning);
 		} else {
 			return $this->verifyFingerprint($remoteFingerprint, $remoteTYPO3Version);
 		}
 	}
-	
-	
+
 	protected function getRemoteChecksum() {
 		$operations = array();
 		$operations[] = array(
-			'GetFilesystemChecksum', 
+			'GetFilesystemChecksum',
 			array('path' => 'typo3_src')
 		);
 		$operations[] = array(
@@ -63,57 +64,108 @@ class tx_caretakerintegrity_CheckCoreIntegrityTestService extends tx_caretakerin
                 } else {
                         return array(false, false, false, $this->getFailedOperationResultTestResult($results[0]));
                 }
-		
+
 		return array($isSuccessful, $remoteFingerprint, $remoteTYPO3Version, false);
 	}
-	
-	
+
+
 	protected function getRemoteSingleFileChecksums() {
 		$operations = array();
 		$operations[] = array(
-			'GetFilesystemChecksum', 
+			'GetFilesystemChecksum',
 			array('path' => 'typo3_src', 'getSingleChecksums' => TRUE)
 		);
 
 		$commandResult = $this->executeRemoteOperations($operations);
 		$results = $commandResult->getOperationResults();
 		$remoteChecksums = $results[0]->getValue();
-		
+
 		return $remoteChecksums;
 	}
-	
-	
+
 	protected function verifyFingerprint($remoteFingerprint, $remoteTYPO3Version) {
-		// TODO get path from config
-		$path = 'EXT:caretaker_integrity/res/fingerprints/typo3_src-' . $remoteTYPO3Version . '.fingerprint';
-		$path = t3lib_div::getFileAbsFileName($path);
-		if (!file_exists($path)) {
-			return tx_caretaker_TestResult::create(tx_caretaker_Constants::state_warning, 0, 'Can\'t find local fingerprint for typo3_src-' . $remoteTYPO3Version );
-		
+		$path = 'EXT:caretaker_integrity/res/fingerprints/';
+		$filename = 'typo3_src-' . $remoteTYPO3Version . '.fingerprint';
+		$extensionConfiguration = unserialize($GLOBALS['TYPO3_CONF_VARS']['EXT']['extConf']['caretaker_integrity']);
+		if (!empty($extensionConfiguration['path.']['fingerprints'])) {
+			$path = rtrim(t3lib_div::fixWindowsFilePath($extensionConfiguration['path.']['fingerprints']), '/') . '/';
+		}
+		$fingerprintFile = t3lib_div::getFileAbsFileName($path . $filename, FALSE);
+		if (!file_exists($fingerprintFile)) {
+			return $this->createTestResult(
+				'Can\'t find local fingerprint file "' . $filename . '" in defined path "' . $path .'"',
+				tx_caretaker_Constants::state_warning
+			);
 		} else {
-			$fingerprint = json_decode(file_get_contents($path), true);
+			$fingerprint = json_decode(file_get_contents($fingerprintFile), true);
 			if ($fingerprint['checksum'] === $remoteFingerprint['checksum']) {
-				return tx_caretaker_TestResult::create(tx_caretaker_Constants::state_ok, 0, '');
+				return $this->createTestResult('TYPO3 source seems to be a git repository');
 			} else {
 				$remote = $this->getRemoteSingleFileChecksums();
 				$errornousFiles = array();
+				$additionalFiles = explode("\n", $this->getConfigValue('additionalFiles'));
+
 				foreach ($remote['singleChecksums'] as $file => $checksum) {
-					// TODO whitelist
 					if ($checksum !== $fingerprint['singleChecksums'][$file]) {
-						$errornousFiles[] = $file;		
+						$valid = FALSE;
+						foreach ($additionalFiles as $additionalFile) {
+							list($regularExpression, $definedChecksum) = explode('=', $additionalFile);
+							if (preg_match('/' . str_replace('/', '\/', $regularExpression) . '/', $file)) {
+								if (empty($definedChecksum) || $checksum === $definedChecksum) {
+									$valid = TRUE;
+								}
+							}
+						}
+						unset($additionalFile);
+
+						if ($valid) {
+							unset($remote['singleChecksums'][$file]);
+						} else {
+							$errornousFiles[] = $file;
+						}
 					}
 				}
+
 				if (count($errornousFiles) > 0) {
-					return tx_caretaker_TestResult::create(tx_caretaker_Constants::state_error, count($errornousFiles), 
-						'Can\'t verify fingerprint (' . count($errornousFiles) . ' files differ) ' . chr(10) . 
-						implode(chr(10) . ' - ', $errornousFiles)
+					return $this->createTestResult(
+						'Can\'t verify fingerprint (' . count($errornousFiles) . ' files differ) ' . chr(10) .
+							implode(chr(10) . ' - ', $errornousFiles),
+						tx_caretaker_Constants::state_error,
+						count($errornousFiles)
 					);
 				} else {
-					return tx_caretaker_TestResult::create(tx_caretaker_Constants::state_error, 0, 'Can\'t verify fingerprint (files seems to be ok, but over-all check failed)!' . chr(10) . 
-						$fingerprint['checksum'] . ' !== ' . $remoteFingerprint['checksum'] );
+					$missingFiles = '(' . implode('|', explode("\n", $this->getConfigValue('missingFiles'))) . ')';
+					foreach ($fingerprint['singleChecksums'] as $file => $checksum) {
+						if (!isset($remote['singleChecksums'][$file]) &&
+							(preg_match('/' . str_replace('/', '\/', static::FILE_FILTER) . '/', $file) || preg_match('/' . str_replace('/', '\/', $missingFiles) . '/', $file)))
+						{
+							unset($fingerprint['singleChecksums'][$file]);
+						}
+					}
+					unset($file, $checksum);
+
+					if (md5(implode(',', $remote['singleChecksums'])) === md5(implode(',', $fingerprint['singleChecksums']))) {
+						return $this->createTestResult('TYPO3 source seems to be a download');
+					} else {
+						return $this->createTestResult(
+							'Can\'t verify fingerprint (files seems to be ok, but over-all check failed)!' . chr(10) .
+								$fingerprint['checksum'] . ' !== ' . $remoteFingerprint['checksum'],
+							tx_caretaker_Constants::state_warning
+						);
+					}
 				}
 			}
 		}
+	}
+
+	/**
+	 * @param string $message
+	 * @param int $state
+	 * @param int $value
+	 * @return tx_caretaker_TestResult
+	 */
+	protected function createTestResult($message, $state = tx_caretaker_Constants::state_ok, $value = 0) {
+		return tx_caretaker_TestResult::create($state, $value, $message);
 	}
 }
 
